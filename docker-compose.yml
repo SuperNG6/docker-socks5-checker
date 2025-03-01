@@ -1,0 +1,24 @@
+services:
+  socks5-checker:
+    container_name: socks5-checker
+    environment:
+      - CHECK_INTERVAL=300          # 每5分钟检查一次
+      - SOCKS5_HOST=socks5-proxy    # 您的socks5容器的主机名
+      - SOCKS5_PORT=1080            # 您的socks5服务的端口
+      - SOCKS5_CONTAINER_NAME=socks5-proxy  # 需要重启的Docker容器名称
+      - CHECK_URL=https://www.cloudflare.com/cdn-cgi/trace
+      - CURL_TIMEOUT=10             # curl超时时间(秒)
+      - RESTART_WAIT=15             # 重启容器后等待时间(秒)
+      - LOG_LEVEL=info              # 日志级别: debug, info, warning, error
+      - TZ=Asia/Shanghai            # 时区设置
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # 需要此权限才能重启其他容器
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    depends_on:
+      - socks5-proxy
+    
