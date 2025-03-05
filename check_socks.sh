@@ -5,7 +5,8 @@ set -eo pipefail
 log() {
     local level="$1"
     local message="$2"
-    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    local timestamp
+    timestamp=$(date '+%Y-%m-%d %H:%M:%S')
     
     case "$LOG_LEVEL" in
         debug)
@@ -77,7 +78,7 @@ check_container_exists() {
 
 # 主函数
 main() {
-    log "INFO" "开始启动socks5连接检查器 v1.0.0"
+    log "INFO" "开始启动socks5连接检查器 v1.2.0"
     log "INFO" "每 $CHECK_INTERVAL 秒通过 $SOCKS5_HOST:$SOCKS5_PORT 检查URL: $CHECK_URL"
     log "INFO" "如果连接失败将重启容器 $SOCKS5_CONTAINER_NAME"
     
@@ -100,11 +101,8 @@ main() {
     while true; do
         log "DEBUG" "开始检查连接..."
         
-        # 尝试通过socks5代理连接
-        RESULT=$(curl -s --max-time $CURL_TIMEOUT --socks5-hostname $SOCKS5_HOST:$SOCKS5_PORT $CHECK_URL)
-        
-        # 检查curl命令是否成功
-        if [ $? -eq 0 ]; then
+        # 捕获 curl 返回值，避免 set -e 导致脚本退出
+        if RESULT=$(curl -s --max-time "$CURL_TIMEOUT" --socks5-hostname "$SOCKS5_HOST:$SOCKS5_PORT" "$CHECK_URL"); then
             # 从结果中提取IP
             IP=$(echo "$RESULT" | grep -oE "ip=([0-9a-f.:]+)" | cut -d= -f2)
             
@@ -115,13 +113,12 @@ main() {
             else
                 log "WARNING" "已连接到socks5代理但无法提取IP地址"
                 ((fail_count++))
-                
                 if [ $fail_count -ge 3 ]; then
                     log "WARNING" "连续3次无法提取IP地址，尝试重启容器..."
-                    if docker restart $SOCKS5_CONTAINER_NAME; then
+                    if docker restart "$SOCKS5_CONTAINER_NAME"; then
                         log "INFO" "容器 $SOCKS5_CONTAINER_NAME 重启命令已发送"
                         log "INFO" "等待 $RESTART_WAIT 秒让容器重启..."
-                        sleep $RESTART_WAIT
+                        sleep "$RESTART_WAIT"
                         fail_count=0
                     else
                         log "ERROR" "重启容器 $SOCKS5_CONTAINER_NAME 失败"
@@ -131,14 +128,12 @@ main() {
         else
             log "WARNING" "连接到socks5代理失败"
             ((fail_count++))
-            
             if [ $fail_count -ge 2 ]; then
                 log "WARNING" "连续2次连接失败，正在重启 $SOCKS5_CONTAINER_NAME 容器..."
-                
-                if docker restart $SOCKS5_CONTAINER_NAME; then
+                if docker restart "$SOCKS5_CONTAINER_NAME"; then
                     log "INFO" "容器 $SOCKS5_CONTAINER_NAME 重启命令已发送"
                     log "INFO" "等待 $RESTART_WAIT 秒让容器重启..."
-                    sleep $RESTART_WAIT
+                    sleep "$RESTART_WAIT"
                     fail_count=0
                 else
                     log "ERROR" "重启容器 $SOCKS5_CONTAINER_NAME 失败"
@@ -147,7 +142,7 @@ main() {
         fi
         
         log "DEBUG" "等待 $CHECK_INTERVAL 秒后再次检查..."
-        sleep $CHECK_INTERVAL
+        sleep "$CHECK_INTERVAL"
     done
 }
 
