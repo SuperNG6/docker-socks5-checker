@@ -1,5 +1,4 @@
 #!/bin/bash
-set -eo pipefail
 
 # 配置日志函数
 log() {
@@ -54,8 +53,9 @@ check_env_vars() {
     fi
     
     if [ $missing -eq 1 ]; then
-        exit 1
+        return 1
     fi
+    return 0
 }
 
 # 检查Docker连接
@@ -78,22 +78,21 @@ check_container_exists() {
 
 # 主函数
 main() {
-    log "INFO" "开始启动socks5连接检查器 v1.2.0"
+    log "INFO" "开始启动socks5连接检查器 v1.3.0"
     log "INFO" "每 $CHECK_INTERVAL 秒通过 $SOCKS5_HOST:$SOCKS5_PORT 检查URL: $CHECK_URL"
     log "INFO" "如果连接失败将重启容器 $SOCKS5_CONTAINER_NAME"
     
-    # 检查环境变量
-    check_env_vars
+    # 环境变量检查：如果不满足条件，则每10秒重试一次
+    while ! check_env_vars; do
+        log "ERROR" "必要的环境变量未设置，10秒后重试..."
+        sleep 10
+    done
     
-    # 检查Docker连接和容器存在性
-    if ! check_docker || ! check_container_exists; then
+    # 检查Docker连接和容器存在性，未满足条件则每10秒重试一次
+    while ! check_docker || ! check_container_exists; do
         log "ERROR" "初始化检查失败，10秒后重试..."
         sleep 10
-        if ! check_docker || ! check_container_exists; then
-            log "ERROR" "初始化检查仍然失败，退出程序"
-            exit 1
-        fi
-    fi
+    done
     
     # 连续失败计数器
     local fail_count=0
@@ -101,14 +100,13 @@ main() {
     while true; do
         log "DEBUG" "开始检查连接..."
         
-        # 捕获 curl 返回值，避免 set -e 导致脚本退出
+        # 捕获 curl 返回值，避免失败直接退出
         if RESULT=$(curl -s --max-time "$CURL_TIMEOUT" --socks5-hostname "$SOCKS5_HOST:$SOCKS5_PORT" "$CHECK_URL"); then
             # 从结果中提取IP
             IP=$(echo "$RESULT" | grep -oE "ip=([0-9a-f.:]+)" | cut -d= -f2)
             
             if [ -n "$IP" ]; then
                 log "INFO" "当前网络正常，IP地址为：$IP"
-                # 重置失败计数
                 fail_count=0
             else
                 log "WARNING" "已连接到socks5代理但无法提取IP地址"

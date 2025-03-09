@@ -30,7 +30,7 @@ HEALTHCHECK --interval=60s --timeout=5s --start-period=5s --retries=3 CMD [ "sh"
 # 添加标签
 LABEL maintainer="SuperNG6" \
       description="通过socks5代理定时检查网络连接状态并在失败时重启代理容器" \
-      version="1.0.0"
+      version="1.3.0"
 
 # 运行脚本
 CMD ["/app/check_socks.sh"]
